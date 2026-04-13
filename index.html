@@ -868,6 +868,7 @@ async function loadAdminView() {
             <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--border)">収入</th>
             <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--border)">支払</th>
             <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--border)">残高</th>
+            <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">名称</th>
             <th style="padding:6px 8px;border-bottom:1px solid var(--border)"></th>
           </tr></thead><tbody>
           <tr style="background:#e8f5e9">
@@ -881,21 +882,55 @@ async function loadAdminView() {
             <td></td>
           </tr>`;
       entries.forEach((e, i) => {
+        const editStyle = `cursor:pointer;border-radius:4px;padding:3px 6px;transition:background 0.15s` +
+          `;outline:none` +
+          `;min-width:20px;display:inline-block`;
         html += `<tr style="border-bottom:1px solid #f0f0f0" id="admin-row-${dept.code}-${i}">
-          <td style="padding:5px 8px;text-align:center">${e.month}</td>
-          <td style="padding:5px 8px;text-align:center">${e.day}</td>
-          <td style="padding:5px 8px">${e.subject||''}</td>
-          <td style="padding:5px 8px">${e.desc||''}</td>
-          <td style="padding:5px 8px;text-align:right;color:var(--success)">${e.income ? Number(e.income).toLocaleString('ja-JP') : ''}</td>
-          <td style="padding:5px 8px;text-align:right;color:var(--accent)">${e.expense ? Number(e.expense).toLocaleString('ja-JP') : ''}</td>
-          <td style="padding:5px 8px;text-align:right">${Number(e.balance||0).toLocaleString('ja-JP')}</td>
           <td style="padding:5px 8px;text-align:center">
-            <button class="btn btn-ghost btn-sm" onclick="adminEditEntry('${dept.code}','${key}',${i})" title="修正">✏️</button>
+            <span contenteditable="true" title="クリックして編集" style="${editStyle}"
+              onfocus="this.style.background='#e8f0ff'" onblur="this.style.background='';adminSaveCell('${key}',${i},'month',this.textContent)"
+            >${e.month}</span>
+          </td>
+          <td style="padding:5px 8px;text-align:center">
+            <span contenteditable="true" title="クリックして編集" style="${editStyle}"
+              onfocus="this.style.background='#e8f0ff'" onblur="this.style.background='';adminSaveCell('${key}',${i},'day',this.textContent)"
+            >${e.day}</span>
+          </td>
+          <td style="padding:5px 8px">
+            <span contenteditable="true" title="クリックして編集" style="${editStyle}"
+              onfocus="this.style.background='#e8f0ff'" onblur="this.style.background='';adminSaveCell('${key}',${i},'subject',this.textContent)"
+            >${e.subject||''}</span>
+          </td>
+          <td style="padding:5px 8px">
+            <span contenteditable="true" title="クリックして編集" style="${editStyle}"
+              onfocus="this.style.background='#e8f0ff'" onblur="this.style.background='';adminSaveCell('${key}',${i},'desc',this.textContent)"
+            >${e.desc||''}</span>
+          </td>
+          <td style="padding:5px 8px;text-align:right;color:var(--success)">
+            <span contenteditable="true" title="クリックして編集" style="${editStyle};text-align:right"
+              onfocus="this.style.background='#e8f0ff';this.textContent='${e.income||''}'" onblur="this.style.background='';adminSaveCell('${key}',${i},'income',this.textContent)"
+            >${e.income ? Number(e.income).toLocaleString('ja-JP') : ''}</span>
+          </td>
+          <td style="padding:5px 8px;text-align:right;color:var(--accent)">
+            <span contenteditable="true" title="クリックして編集" style="${editStyle};text-align:right"
+              onfocus="this.style.background='#e8f0ff';this.textContent='${e.expense||''}'" onblur="this.style.background='';adminSaveCell('${key}',${i},'expense',this.textContent)"
+            >${e.expense ? Number(e.expense).toLocaleString('ja-JP') : ''}</span>
+          </td>
+          <td style="padding:5px 8px;text-align:right">${Number(e.balance||0).toLocaleString('ja-JP')}</td>
+          <td style="padding:5px 8px">
+            <span contenteditable="true" title="クリックして編集" style="${editStyle}"
+              onfocus="this.style.background='#e8f0ff'" onblur="this.style.background='';adminSaveCell('${key}',${i},'name',this.textContent)"
+            >${e.name||''}</span>
+          </td>
+          <td style="padding:5px 4px;text-align:center;white-space:nowrap">
+            <button title="上へ" style="border:none;background:none;cursor:pointer;padding:2px 4px;font-size:14px;color:#888" onclick="adminMoveRow('${key}',${i},-1)">▲</button>
+            <button title="下へ" style="border:none;background:none;cursor:pointer;padding:2px 4px;font-size:14px;color:#888" onclick="adminMoveRow('${key}',${i},1)">▼</button>
+            <button title="削除" style="border:none;background:none;cursor:pointer;padding:2px 4px;font-size:14px;color:#e63946" onclick="adminDeleteRow('${key}',${i})">🗑</button>
           </td>
         </tr>`;
       });
       html += `<tr style="background:#fff8e1;font-weight:700">
-        <td colspan="6" style="padding:6px 8px;text-align:right">最終残高</td>
+        <td colspan="7" style="padding:6px 8px;text-align:right">最終残高</td>
         <td style="padding:6px 8px;text-align:right">¥${Number(data.finalBalance||0).toLocaleString('ja-JP')}</td>
         <td></td>
       </tr>`;
@@ -908,8 +943,8 @@ async function loadAdminView() {
 
 let adminEditCache = {};
 
-async function adminEditEntry(deptCode, firestoreKey, idx) {
-  // Load data from Firestore
+async function adminSaveCell(firestoreKey, idx, field, value) {
+  value = value.trim().replace(/,/g, '');
   let data = adminEditCache[firestoreKey];
   if (!data) {
     const doc = await db.collection('koguchi').doc(firestoreKey).get();
@@ -917,26 +952,60 @@ async function adminEditEntry(deptCode, firestoreKey, idx) {
     data = doc.data();
     adminEditCache[firestoreKey] = data;
   }
-  const e = data.entries[idx];
-  const newDesc = prompt(`摘要を修正（${e.subject}）:`, e.desc || '');
-  if (newDesc === null) return;
-  const newIncome = prompt('収入金額（変更なければそのままEnter）:', e.income || '');
-  if (newIncome === null) return;
-  const newExpense = prompt('支払金額（変更なければそのままEnter）:', e.expense || '');
-  if (newExpense === null) return;
-
-  data.entries[idx].desc = newDesc;
-  if (newIncome !== '') data.entries[idx].income = newIncome;
-  if (newExpense !== '') data.entries[idx].expense = newExpense;
+  if (!data.entries[idx]) return;
+  if (field === 'income' || field === 'expense' || field === 'month' || field === 'day') {
+    data.entries[idx][field] = value === '' ? '' : Number(value) || data.entries[idx][field];
+  } else {
+    data.entries[idx][field] = value;
+  }
   data.savedAt = new Date().toLocaleString('ja-JP') + '（修正）';
-
   try {
     await db.collection('koguchi').doc(firestoreKey).set(data);
-    showToast('修正を保存しました', 'success');
     adminEditCache[firestoreKey] = data;
+    // 残高再計算のため再描画
     loadAdminView();
   } catch(err) {
     showToast('保存失敗: ' + err.message, 'error');
+  }
+}
+
+async function adminDeleteRow(firestoreKey, idx) {
+  if (!confirm('この行を削除してよいですか？')) return;
+  let data = adminEditCache[firestoreKey];
+  if (!data) {
+    const doc = await db.collection('koguchi').doc(firestoreKey).get();
+    if (!doc.exists) return;
+    data = doc.data();
+  }
+  data.entries.splice(idx, 1);
+  data.savedAt = new Date().toLocaleString('ja-JP') + '（修正）';
+  try {
+    await db.collection('koguchi').doc(firestoreKey).set(data);
+    adminEditCache[firestoreKey] = data;
+    loadAdminView();
+  } catch(err) {
+    showToast('削除失敗: ' + err.message, 'error');
+  }
+}
+
+async function adminMoveRow(firestoreKey, idx, dir) {
+  let data = adminEditCache[firestoreKey];
+  if (!data) {
+    const doc = await db.collection('koguchi').doc(firestoreKey).get();
+    if (!doc.exists) return;
+    data = doc.data();
+  }
+  const arr = data.entries;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= arr.length) return;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  data.savedAt = new Date().toLocaleString('ja-JP') + '（修正）';
+  try {
+    await db.collection('koguchi').doc(firestoreKey).set(data);
+    adminEditCache[firestoreKey] = data;
+    loadAdminView();
+  } catch(err) {
+    showToast('移動失敗: ' + err.message, 'error');
   }
 }
 
