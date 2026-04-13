@@ -722,13 +722,25 @@ tbody td input[type="number"] { text-align: right; }
 
   <!-- Tab: Admin -->
   <div class="tab-panel" id="tab-admin">
+    <!-- パスワード画面 -->
+    <div id="admin-lock" class="card" style="max-width:360px;margin:60px auto">
+      <div class="card-header" style="background:#fff8e1;border-color:#f4a261">🔒 管理者認証</div>
+      <div class="card-body" style="text-align:center;padding:32px 24px">
+        <p style="margin-bottom:16px;color:var(--text-sub)">管理者パスワードを入力してください</p>
+        <input type="password" id="admin-pw-input" placeholder="パスワード"
+          style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:15px;text-align:center;margin-bottom:12px"
+          onkeydown="if(event.key==='Enter')checkAdminPw()">
+        <button class="btn" style="width:100%" onclick="checkAdminPw()">ログイン</button>
+        <p id="admin-pw-error" style="color:var(--accent);margin-top:10px;display:none">パスワードが違います</p>
+      </div>
+    </div>
+    <!-- 管理コンテンツ（認証後表示） -->
+    <div id="admin-content" style="display:none">
     <div class="card">
       <div class="card-header" style="background:#fff8e1;border-color:#f4a261">
         👁 管理者ビュー（3園リアルタイム確認）
         <div style="margin-left:auto;display:flex;gap:8px">
           <select id="admin-reiwa" onchange="loadAdminView()" style="font-size:13px;padding:4px 8px;border:1px solid #ddd;border-radius:6px">
-            <option value="7">令和7年度</option>
-            <option value="6">令和6年度</option>
           </select>
           <select id="admin-month" onchange="loadAdminView()" style="font-size:13px;padding:4px 8px;border:1px solid #ddd;border-radius:6px">
             <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
@@ -743,6 +755,7 @@ tbody td input[type="number"] { text-align: right; }
         <p style="color:var(--text-light);text-align:center;padding:24px">管理者ビュータブをクリックするとデータを読み込みます</p>
       </div>
     </div>
+    </div><!-- /admin-content -->
   </div>
 
 </div>
@@ -776,11 +789,26 @@ async function saveToFirestore(data) {
   try {
     const key = getFirestoreKey();
     await db.collection('koguchi').doc(key).set(data);
-    showToast('クラウドに保存しました', 'success');
   } catch(e) {
     console.error('Firestore save error:', e);
-    showToast('クラウド保存失敗（ローカルには保存済）', 'warning');
   }
+}
+
+function autoSaveToFirestore() {
+  calcBalance();
+  const finalBalance = entries.length > 0 ? entries[entries.length - 1].balance : getPrevBalance();
+  const data = {
+    schoolName: getDeptName(),
+    reiwaYear: document.getElementById('reiwa-year').value,
+    month: getTargetMonth(),
+    prevBalance: document.getElementById('prev-balance').value,
+    deptCode: document.getElementById('dept-code').value,
+    entries: entries,
+    finalBalance: finalBalance,
+    savedAt: new Date().toLocaleString('ja-JP'),
+    confirmed: false
+  };
+  saveToFirestore(data);
 }
 
 async function loadFromFirestore() {
@@ -822,7 +850,7 @@ async function loadAdminView() {
     html += `<div style="margin-bottom:24px">
       <div style="font-weight:700;font-size:14px;padding:8px 12px;background:var(--primary);color:white;border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px">
         ${dept.name}
-        <span style="margin-left:auto;font-size:11px;font-weight:400;opacity:0.8">${data ? '確定済 ' + (data.savedAt||'') : '未確定'}</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:400;opacity:0.8">${data ? (data.confirmed === false ? '入力中 ' : '確定済 ') + (data.savedAt||'') : '未入力'}</span>
       </div>`;
 
     if (!data) {
@@ -937,6 +965,43 @@ let mappings = [
 // ============================================================
 // UI helpers
 // ============================================================
+const ADMIN_PASSWORD = 'aoba2024';
+let adminUnlocked = false;
+
+function checkAdminPw() {
+  const val = document.getElementById('admin-pw-input').value;
+  if (val === ADMIN_PASSWORD) {
+    adminUnlocked = true;
+    document.getElementById('admin-lock').style.display = 'none';
+    document.getElementById('admin-content').style.display = 'block';
+    populateAdminYears();
+    const now = new Date();
+    document.getElementById('admin-month').value = now.getMonth() + 1;
+    loadAdminView();
+  } else {
+    document.getElementById('admin-pw-error').style.display = 'block';
+    document.getElementById('admin-pw-input').value = '';
+    document.getElementById('admin-pw-input').focus();
+  }
+}
+
+function populateAdminYears() {
+  const sel = document.getElementById('admin-reiwa');
+  sel.innerHTML = '';
+  // 令和6年度スタート、現在+2年まで動的生成
+  const now = new Date();
+  // 令和元年 = 2019年
+  const currentReiwa = now.getFullYear() - 2018;
+  const maxReiwa = currentReiwa + 2;
+  for (let y = maxReiwa; y >= 6; y--) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = `令和${y}年度`;
+    if (y === currentReiwa) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
 function switchTab(id) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -945,10 +1010,17 @@ function switchTab(id) {
   if (id === 'ledger') renderLedger();
   if (id === 'csv') renderMappings();
   if (id === 'admin') {
-    // デフォルトで現在月をセット
-    const now = new Date();
-    document.getElementById('admin-month').value = now.getMonth() + 1;
-    loadAdminView();
+    if (adminUnlocked) {
+      populateAdminYears();
+      const now = new Date();
+      document.getElementById('admin-month').value = now.getMonth() + 1;
+      loadAdminView();
+    } else {
+      // パスワード画面を表示
+      document.getElementById('admin-lock').style.display = 'block';
+      document.getElementById('admin-content').style.display = 'none';
+      setTimeout(() => document.getElementById('admin-pw-input').focus(), 100);
+    }
   }
 }
 
@@ -1007,6 +1079,7 @@ function addRow() {
   calcBalance();
   renderEntryTable();
   updateSummary();
+  autoSaveToFirestore();
 
   // Clear fields
   document.getElementById('inp-income').value = '';
@@ -1023,6 +1096,7 @@ function deleteRow(i) {
   calcBalance();
   renderEntryTable();
   updateSummary();
+  autoSaveToFirestore();
 }
 
 function moveEntry(i, dir) {
@@ -1056,6 +1130,7 @@ function dragDrop(event, i) {
   calcBalance();
   renderEntryTable();
   updateSummary();
+  autoSaveToFirestore();
 }
 
 function dragEnd(event) {
@@ -1859,7 +1934,8 @@ function saveMonthData() {
     deptCode: document.getElementById('dept-code').value,
     entries: entries,
     finalBalance: finalBalance,
-    savedAt: new Date().toLocaleString('ja-JP')
+    savedAt: new Date().toLocaleString('ja-JP'),
+    confirmed: true
   };
       localStorage.setItem(key, JSON.stringify(data));
       localStorage.setItem('koguchi_settings', JSON.stringify({
