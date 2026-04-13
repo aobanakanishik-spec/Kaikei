@@ -6,6 +6,8 @@
 <title>小口現金管理システム</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=BIZ+UDGothic:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
 :root {
   --bg: #f0f2f5;
@@ -413,6 +415,7 @@ tbody td input[type="number"] { text-align: right; }
     <button class="tab" onclick="switchTab('ledger')">📋 小口現金出納帳</button>
     <button class="tab" onclick="switchTab('csv')">📤 らくらくCSV出力</button>
     <button class="tab" onclick="switchTab('import')">📥 既存ファイル取込</button>
+    <button class="tab" onclick="switchTab('admin')" style="background:#fff8e1;color:#b45309;border-color:#f4a261">👁 管理者ビュー</button>
   </div>
 
   <!-- Tab: Input -->
@@ -717,12 +720,198 @@ tbody td input[type="number"] { text-align: right; }
     </div>
   </div>
 
+  <!-- Tab: Admin -->
+  <div class="tab-panel" id="tab-admin">
+    <div class="card">
+      <div class="card-header" style="background:#fff8e1;border-color:#f4a261">
+        👁 管理者ビュー（3園リアルタイム確認）
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <select id="admin-reiwa" onchange="loadAdminView()" style="font-size:13px;padding:4px 8px;border:1px solid #ddd;border-radius:6px">
+            <option value="7">令和7年度</option>
+            <option value="6">令和6年度</option>
+          </select>
+          <select id="admin-month" onchange="loadAdminView()" style="font-size:13px;padding:4px 8px;border:1px solid #ddd;border-radius:6px">
+            <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+            <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+            <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+            <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+          </select>
+          <button class="btn btn-sm" style="background:#f59e0b;color:white" onclick="loadAdminView()">🔄 更新</button>
+        </div>
+      </div>
+      <div class="card-body" id="admin-body">
+        <p style="color:var(--text-light);text-align:center;padding:24px">管理者ビュータブをクリックするとデータを読み込みます</p>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
 <script>
+// ============================================================
+// Firebase 初期化
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBn5fut3ncYuuRc2VJ9dtgs-sXifg516y8",
+  authDomain: "aoba-kaikei.firebaseapp.com",
+  projectId: "aoba-kaikei",
+  storageBucket: "aoba-kaikei.firebasestorage.app",
+  messagingSenderId: "279356043215",
+  appId: "1:279356043215:web:0e97fc5953d323a3beacba"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+function getFirestoreKey() {
+  const y = document.getElementById('reiwa-year').value;
+  const m = String(getTargetMonth()).padStart(2,'0');
+  const d = document.getElementById('dept-code').value;
+  return `R${y}_dept${d}_${m}`;
+}
+
+async function saveToFirestore(data) {
+  try {
+    const key = getFirestoreKey();
+    await db.collection('koguchi').doc(key).set(data);
+    showToast('クラウドに保存しました', 'success');
+  } catch(e) {
+    console.error('Firestore save error:', e);
+    showToast('クラウド保存失敗（ローカルには保存済）', 'warning');
+  }
+}
+
+async function loadFromFirestore() {
+  try {
+    const key = getFirestoreKey();
+    const doc = await db.collection('koguchi').doc(key).get();
+    if (doc.exists) return doc.data();
+  } catch(e) {
+    console.error('Firestore load error:', e);
+  }
+  return null;
+}
+
+// ============================================================
+// 管理者ビュー
+// ============================================================
+const DEPT_LIST = [
+  { code: '1', name: '北海道徳風学園' },
+  { code: '2', name: '札幌あおば幼稚園' },
+  { code: '3', name: '苫小牧あおば認定こども園' },
+  { code: '4', name: '釧路あおば幼稚園' }
+];
+
+async function loadAdminView() {
+  const y = document.getElementById('admin-reiwa').value;
+  const m = String(document.getElementById('admin-month').value).padStart(2,'0');
+  const body = document.getElementById('admin-body');
+  body.innerHTML = '<p style="text-align:center;padding:24px;color:var(--text-sub)">読み込み中...</p>';
+
+  let html = '';
+  for (const dept of DEPT_LIST) {
+    const key = `R${y}_dept${dept.code}_${m}`;
+    let data = null;
+    try {
+      const doc = await db.collection('koguchi').doc(key).get();
+      if (doc.exists) data = doc.data();
+    } catch(e) {}
+
+    html += `<div style="margin-bottom:24px">
+      <div style="font-weight:700;font-size:14px;padding:8px 12px;background:var(--primary);color:white;border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px">
+        ${dept.name}
+        <span style="margin-left:auto;font-size:11px;font-weight:400;opacity:0.8">${data ? '確定済 ' + (data.savedAt||'') : '未確定'}</span>
+      </div>`;
+
+    if (!data) {
+      html += `<div style="padding:16px;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;color:var(--text-light);text-align:center">データなし（未入力または未確定）</div>`;
+    } else {
+      const entries = data.entries || [];
+      const prev = data.prevBalance || 0;
+      html += `<div style="overflow-x:auto;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px">
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)">月</th>
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)">日</th>
+            <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">科目</th>
+            <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">摘要</th>
+            <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--border)">収入</th>
+            <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--border)">支払</th>
+            <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--border)">残高</th>
+            <th style="padding:6px 8px;border-bottom:1px solid var(--border)"></th>
+          </tr></thead><tbody>
+          <tr style="background:#e8f5e9">
+            <td style="padding:5px 8px;text-align:center">${parseInt(m)}</td>
+            <td style="padding:5px 8px;text-align:center">1</td>
+            <td style="padding:5px 8px">前月繰越金</td>
+            <td style="padding:5px 8px"></td>
+            <td style="padding:5px 8px;text-align:right">${Number(prev).toLocaleString('ja-JP')}</td>
+            <td style="padding:5px 8px"></td>
+            <td style="padding:5px 8px;text-align:right">${Number(prev).toLocaleString('ja-JP')}</td>
+            <td></td>
+          </tr>`;
+      entries.forEach((e, i) => {
+        html += `<tr style="border-bottom:1px solid #f0f0f0" id="admin-row-${dept.code}-${i}">
+          <td style="padding:5px 8px;text-align:center">${e.month}</td>
+          <td style="padding:5px 8px;text-align:center">${e.day}</td>
+          <td style="padding:5px 8px">${e.subject||''}</td>
+          <td style="padding:5px 8px">${e.desc||''}</td>
+          <td style="padding:5px 8px;text-align:right;color:var(--success)">${e.income ? Number(e.income).toLocaleString('ja-JP') : ''}</td>
+          <td style="padding:5px 8px;text-align:right;color:var(--accent)">${e.expense ? Number(e.expense).toLocaleString('ja-JP') : ''}</td>
+          <td style="padding:5px 8px;text-align:right">${Number(e.balance||0).toLocaleString('ja-JP')}</td>
+          <td style="padding:5px 8px;text-align:center">
+            <button class="btn btn-ghost btn-sm" onclick="adminEditEntry('${dept.code}','${key}',${i})" title="修正">✏️</button>
+          </td>
+        </tr>`;
+      });
+      html += `<tr style="background:#fff8e1;font-weight:700">
+        <td colspan="6" style="padding:6px 8px;text-align:right">最終残高</td>
+        <td style="padding:6px 8px;text-align:right">¥${Number(data.finalBalance||0).toLocaleString('ja-JP')}</td>
+        <td></td>
+      </tr>`;
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+  }
+  body.innerHTML = html;
+}
+
+let adminEditCache = {};
+
+async function adminEditEntry(deptCode, firestoreKey, idx) {
+  // Load data from Firestore
+  let data = adminEditCache[firestoreKey];
+  if (!data) {
+    const doc = await db.collection('koguchi').doc(firestoreKey).get();
+    if (!doc.exists) return;
+    data = doc.data();
+    adminEditCache[firestoreKey] = data;
+  }
+  const e = data.entries[idx];
+  const newDesc = prompt(`摘要を修正（${e.subject}）:`, e.desc || '');
+  if (newDesc === null) return;
+  const newIncome = prompt('収入金額（変更なければそのままEnter）:', e.income || '');
+  if (newIncome === null) return;
+  const newExpense = prompt('支払金額（変更なければそのままEnter）:', e.expense || '');
+  if (newExpense === null) return;
+
+  data.entries[idx].desc = newDesc;
+  if (newIncome !== '') data.entries[idx].income = newIncome;
+  if (newExpense !== '') data.entries[idx].expense = newExpense;
+  data.savedAt = new Date().toLocaleString('ja-JP') + '（修正）';
+
+  try {
+    await db.collection('koguchi').doc(firestoreKey).set(data);
+    showToast('修正を保存しました', 'success');
+    adminEditCache[firestoreKey] = data;
+    loadAdminView();
+  } catch(err) {
+    showToast('保存失敗: ' + err.message, 'error');
+  }
+}
+
 // ============================================================
 // Data store
 // ============================================================
@@ -755,6 +944,12 @@ function switchTab(id) {
   event.currentTarget.classList.add('active');
   if (id === 'ledger') renderLedger();
   if (id === 'csv') renderMappings();
+  if (id === 'admin') {
+    // デフォルトで現在月をセット
+    const now = new Date();
+    document.getElementById('admin-month').value = now.getMonth() + 1;
+    loadAdminView();
+  }
 }
 
 function showToast(msg, type='') {
@@ -1675,6 +1870,7 @@ function saveMonthData() {
       status.textContent = `確定済 ${data.savedAt}`;
       showToast('今月を確定しました！繰越金が翌月に引き継がれます', 'success');
       updateConfirmButton();
+      saveToFirestore(data);
     }
   );
 }
