@@ -486,15 +486,18 @@ tbody td input[type="number"] { text-align: right; }
         <div class="form-grid-3">
           <div class="form-group">
             <label>月</label>
-            <input autocomplete="new-password" type="number" id="inp-month" value="3" min="1" max="12">
+            <input autocomplete="new-password" type="number" id="inp-month" value="3" min="1" max="12"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('inp-day').focus()}">
           </div>
           <div class="form-group">
             <label>日</label>
-            <input autocomplete="new-password" type="number" id="inp-day" value="" min="1" max="31" placeholder="例: 9">
+            <input autocomplete="new-password" type="number" id="inp-day" value="" min="1" max="31" placeholder="例: 9"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('inp-tax').focus()}">
           </div>
           <div class="form-group">
             <label>消費税</label>
-            <select autocomplete="new-password" id="inp-tax">
+            <select autocomplete="new-password" id="inp-tax"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('inp-subject').focus()}"
               <option value="non">非課税</option>
               <option value="8pct">8%</option>
               <option value="10pct">10%</option>
@@ -511,6 +514,7 @@ tbody td input[type="number"] { text-align: right; }
                 onchange="onSubjectChange()"
                 onblur="closeSubjectList()"
                 onfocus="onSubjectInput()"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('subject-list').style.display='none';document.getElementById('inp-desc').focus()}"
                 style="width:100%;padding-right:32px">
               <button type="button" onclick="toggleSubjectList()"
                 style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-sub);font-size:14px;padding:4px">▼</button>
@@ -519,21 +523,25 @@ tbody td input[type="number"] { text-align: right; }
           <!-- subject-list は body直下に fixed で描画 -->
           <div class="form-group">
             <label>摘要</label>
-            <input autocomplete="new-password" type="search" id="inp-desc"  value="" placeholder="例: 行①卒/靴下">
+            <input autocomplete="new-password" type="search" id="inp-desc"  value="" placeholder="例: 行①卒/靴下"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('inp-income').focus()}">
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:12px">
           <div class="form-group">
             <label>収入金額（円）</label>
-            <input autocomplete="new-password" type="number" id="inp-income" value="" min="0" placeholder="0">
+            <input autocomplete="new-password" type="number" id="inp-income" value="" min="0" placeholder="0"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('inp-expense').focus()}">
           </div>
           <div class="form-group">
             <label>支払金額（円）</label>
-            <input autocomplete="new-password" type="number" id="inp-expense" value="" min="0" placeholder="0">
+            <input autocomplete="new-password" type="number" id="inp-expense" value="" min="0" placeholder="0"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('inp-name').focus()}">
           </div>
           <div class="form-group">
             <label>名称（店名・氏名）</label>
-            <input autocomplete="new-password" type="search" id="inp-name"  value="" placeholder="例: アークス">
+            <input autocomplete="new-password" type="search" id="inp-name"  value="" placeholder="例: アークス"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();addRow()}">
           </div>
           <div class="form-group" style="justify-content:flex-end">
             <label>&nbsp;</label>
